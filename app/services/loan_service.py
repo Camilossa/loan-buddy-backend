@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..db import SessionLocal
 from ..models import LoanModel, PaymentModel
@@ -15,30 +16,33 @@ from ..schemas import Loan, LoanCreate, LoanSummary, LoanUpdate, Payment, Paymen
 class LoanService:
     """Domain logic for loans, payments and dashboard summaries backed by SQLAlchemy."""
 
-    def __init__(self, session_factory: SessionLocal = SessionLocal) -> None:  # type: ignore
+    def __init__(
+        self, session_factory: async_sessionmaker[AsyncSession] = SessionLocal
+    ) -> None:
         self.session_factory = session_factory
 
     # ---- Public API -----------------------------------------------------
-    def list_loans(self) -> List[Loan]:
-        with self.session_factory() as session:
-            loans = session.execute(select(LoanModel)).scalars().all()
+    async def list_loans(self) -> List[Loan]:
+        async with self.session_factory() as session:
+            result = await session.execute(select(LoanModel))
+            loans = result.scalars().all()
             changed = False
             for loan in loans:
                 changed |= self._refresh_status(loan)
             if changed:
-                session.commit()
+                await session.commit()
             return [self._to_loan_schema(loan) for loan in loans]
 
-    def get_loan(self, loan_id: str) -> Optional[Loan]:
-        with self.session_factory() as session:
-            loan = session.get(LoanModel, loan_id)
+    async def get_loan(self, loan_id: str) -> Optional[Loan]:
+        async with self.session_factory() as session:
+            loan = await session.get(LoanModel, loan_id)
             if not loan:
                 return None
             if self._refresh_status(loan):
-                session.commit()
+                await session.commit()
             return self._to_loan_schema(loan)
 
-    def create_loan(self, payload: LoanCreate) -> Loan:
+    async def create_loan(self, payload: LoanCreate) -> Loan:
         now = datetime.utcnow()
         monthly_payment = self._calculate_monthly_payment(
             payload.principalAmount, payload.interestRate, payload.totalInstallments
@@ -62,15 +66,15 @@ class LoanService:
             updatedAt=now,
         )
 
-        with self.session_factory() as session:
+        async with self.session_factory() as session:
             session.add(loan)
-            session.commit()
-            session.refresh(loan)
+            await session.commit()
+            await session.refresh(loan)
             return self._to_loan_schema(loan)
 
-    def update_loan(self, loan_id: str, payload: LoanUpdate) -> Optional[Loan]:
-        with self.session_factory() as session:
-            loan = session.get(LoanModel, loan_id)
+    async def update_loan(self, loan_id: str, payload: LoanUpdate) -> Optional[Loan]:
+        async with self.session_factory() as session:
+            loan = await session.get(LoanModel, loan_id)
             if not loan:
                 return None
 
@@ -90,43 +94,41 @@ class LoanService:
 
             loan.updatedAt = datetime.utcnow()
             self._refresh_status(loan)
-            session.commit()
-            session.refresh(loan)
+            await session.commit()
+            await session.refresh(loan)
             return self._to_loan_schema(loan)
 
-    def delete_loan(self, loan_id: str) -> bool:
-        with self.session_factory() as session:
-            loan = session.get(LoanModel, loan_id)
+    async def delete_loan(self, loan_id: str) -> bool:
+        async with self.session_factory() as session:
+            loan = await session.get(LoanModel, loan_id)
             if not loan:
                 return False
-            session.delete(loan)
-            session.commit()
+            await session.delete(loan)
+            await session.commit()
             return True
 
-    def list_payments(self, limit: Optional[int] = None) -> List[Payment]:
-        with self.session_factory() as session:
+    async def list_payments(self, limit: Optional[int] = None) -> List[Payment]:
+        async with self.session_factory() as session:
             stmt = select(PaymentModel).order_by(PaymentModel.paymentDate.desc())
             if limit:
                 stmt = stmt.limit(limit)
-            payments = session.execute(stmt).scalars().all()
+            payments = (await session.execute(stmt)).scalars().all()
             return [self._to_payment_schema(p) for p in payments]
 
-    def get_payments_by_loan(self, loan_id: str) -> List[Payment]:
-        with self.session_factory() as session:
+    async def get_payments_by_loan(self, loan_id: str) -> List[Payment]:
+        async with self.session_factory() as session:
             payments = (
-                session.execute(
+                await session.execute(
                     select(PaymentModel)
                     .where(PaymentModel.loanId == loan_id)
                     .order_by(PaymentModel.paymentDate.desc())
                 )
-                .scalars()
-                .all()
-            )
+            ).scalars().all()
             return [self._to_payment_schema(p) for p in payments]
 
-    def add_payment(self, payload: PaymentCreate) -> Optional[Payment]:
-        with self.session_factory() as session:
-            loan = session.get(LoanModel, payload.loanId)
+    async def add_payment(self, payload: PaymentCreate) -> Optional[Payment]:
+        async with self.session_factory() as session:
+            loan = await session.get(LoanModel, payload.loanId)
             if not loan:
                 return None
 
@@ -163,21 +165,21 @@ class LoanService:
             loan.updatedAt = now
             self._refresh_status(loan)
 
-            session.commit()
-            session.refresh(payment)
-            session.refresh(loan)
+            await session.commit()
+            await session.refresh(payment)
+            await session.refresh(loan)
             return self._to_payment_schema(payment)
 
-    def compute_summary(self) -> LoanSummary:
-        with self.session_factory() as session:
-            loans = session.execute(select(LoanModel)).scalars().all()
-            payments = session.execute(select(PaymentModel)).scalars().all()
+    async def compute_summary(self) -> LoanSummary:
+        async with self.session_factory() as session:
+            loans = (await session.execute(select(LoanModel))).scalars().all()
+            payments = (await session.execute(select(PaymentModel))).scalars().all()
 
             changed = False
             for loan in loans:
                 changed |= self._refresh_status(loan)
             if changed:
-                session.commit()
+                await session.commit()
 
             total_lent = sum(loan.principalAmount for loan in loans)
             total_received = sum(p.amount for p in payments if p.status == "completed")
@@ -197,22 +199,22 @@ class LoanService:
                 upcomingPayments=upcoming_payments,
             )
 
-    def get_upcoming_payments(self) -> List[dict]:
-        with self.session_factory() as session:
-            loans = session.execute(select(LoanModel)).scalars().all()
+    async def get_upcoming_payments(self) -> List[dict]:
+        async with self.session_factory() as session:
+            loans = (await session.execute(select(LoanModel))).scalars().all()
             for loan in loans:
                 self._refresh_status(loan)
-            session.commit()
+            await session.commit()
             return self._compute_upcoming(loans)
 
-    def get_overdue_loans(self) -> List[Loan]:
-        with self.session_factory() as session:
-            loans = session.execute(select(LoanModel)).scalars().all()
+    async def get_overdue_loans(self) -> List[Loan]:
+        async with self.session_factory() as session:
+            loans = (await session.execute(select(LoanModel))).scalars().all()
             changed = False
             for loan in loans:
                 changed |= self._refresh_status(loan)
             if changed:
-                session.commit()
+                await session.commit()
             return [self._to_loan_schema(l) for l in loans if l.status == "overdue"]
 
     # ---- Helpers --------------------------------------------------------

@@ -1,9 +1,10 @@
 from datetime import date
 from pathlib import Path
-from typing import Generator
+from typing import AsyncGenerator
 import sys
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 # Ensure project root is on sys.path so `app` package imports work when running pytest from repo root.
@@ -19,19 +20,20 @@ from app.models import Base
 import app.api.routes as routes
 
 
-@pytest.fixture()
-def temp_service(monkeypatch, tmp_path: Path) -> Generator[LoanService, None, None]:
+@pytest_asyncio.fixture()
+async def temp_service(tmp_path: Path) -> AsyncGenerator[LoanService, None]:
     """Create an isolated LoanService backed by a temp SQLite DB so tests don't touch real data."""
     db_path = tmp_path / "test.db"
     db_url = f"sqlite:///{db_path}"
 
     db.init_engine(db_url)
-    Base.metadata.create_all(bind=db.engine)
+    async with db.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     service = LoanService(session_factory=db.SessionLocal)
 
     # Seed a sample loan so list endpoint has data
-    service.create_loan(
+    await service.create_loan(
         LoanCreate(
             debtorName="Fixture User",
             debtorEmail="fixture@example.com",
@@ -47,7 +49,10 @@ def temp_service(monkeypatch, tmp_path: Path) -> Generator[LoanService, None, No
     # Swap the global service used by routes so API calls hit the isolated DB.
     routes.service = service
 
-    yield service
+    try:
+        yield service
+    finally:
+        await db.engine.dispose()
 
 
 @pytest.fixture()

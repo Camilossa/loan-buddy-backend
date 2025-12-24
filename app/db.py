@@ -1,8 +1,16 @@
-import os
 import logging
-from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine, make_url
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+import os
+
+from dotenv import load_dotenv
+from sqlalchemy import event
+from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
@@ -14,12 +22,16 @@ if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
 logger.setLevel(logging.INFO)
 
+load_dotenv()
 
-def _normalize_postgres_driver(database_url: str) -> str:
-    """Force psycopg (v3) driver when URL omits a driver."""
+
+def _normalize_driver(database_url: str) -> str:
+    """Force async drivers (asyncpg/aiosqlite) when URL omits them."""
     url = make_url(database_url)
-    if url.drivername in {"postgres", "postgresql"}:
-        url = url.set(drivername="postgresql+psycopg")
+    if url.drivername.startswith("postgresql") and "asyncpg" not in url.drivername:
+        url = url.set(drivername="postgresql+asyncpg")
+    elif url.drivername.startswith("sqlite") and "aiosqlite" not in url.drivername:
+        url = url.set(drivername="sqlite+aiosqlite")
     return str(url)
 
 
@@ -31,51 +43,51 @@ def _mask_url(database_url: str) -> str:
         return "<invalid DATABASE_URL>"
 
 
-def _build_engine(url: str | None = None) -> Engine:
+def _build_engine(url: str | None = None) -> AsyncEngine:
     database_url = url or os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError(
             "DATABASE_URL no está definido. Ej: postgres://user:pass@host:port/dbname"
         )
 
-    database_url = _normalize_postgres_driver(database_url)
+    # Neon requiere driver async (asyncpg) para conexiones eficientes.
+    database_url = _normalize_driver(database_url)
 
     masked = _mask_url(database_url)
     logger.info("Usando DATABASE_URL=%s", masked)
 
-    connect_args = (
-        {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    )
     try:
-        engine = create_engine(database_url, future=True, connect_args=connect_args)
+        engine = create_async_engine(database_url, echo=False, future=True)
     except Exception as exc:
         logger.error("Error creando engine con DATABASE_URL=%s", masked)
         raise exc
 
     if database_url.startswith("sqlite"):
 
-        @event.listens_for(engine, "connect")
+        @event.listens_for(engine.sync_engine, "connect")
         def set_sqlite_pragma(dbapi_connection, _):  # type: ignore
             dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
     return engine
 
 
-engine = _build_engine()
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+engine: AsyncEngine = _build_engine()
+SessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
+    bind=engine, expire_on_commit=False, autoflush=False, autocommit=False
+)
 
 
-def init_engine(url: str) -> Engine:
+def init_engine(url: str) -> AsyncEngine:
     """Recreate the engine/sessionmaker for a given URL (used in tests)."""
     global engine, SessionLocal
     engine = _build_engine(url)
-    SessionLocal = sessionmaker(
-        bind=engine, autoflush=False, autocommit=False, future=True
+    SessionLocal = async_sessionmaker(
+        bind=engine, expire_on_commit=False, autoflush=False, autocommit=False
     )
     return engine
 
 
-def get_session():
-    """Yield a session for dependency injection (not used directly in routes today)."""
-    with SessionLocal() as session:
+async def get_session():
+    """Async session dependency for FastAPI routes."""
+    async with SessionLocal() as session:
         yield session

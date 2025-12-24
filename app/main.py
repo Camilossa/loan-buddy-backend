@@ -1,7 +1,6 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect
 
 from .api.routes import api_router
 from .db import engine
@@ -33,15 +32,15 @@ app.add_middleware(
 app.include_router(api_router)
 
 
-# Ensure tables exist only if missing
-def _ensure_tables() -> None:
-    inspector = inspect(engine)
-    missing = [name for name in Base.metadata.tables if not inspector.has_table(name)]
-    if missing:
-        Base.metadata.create_all(bind=engine)
+async def _ensure_tables() -> None:
+    """Create tables on startup using the async engine."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-_ensure_tables()
+@app.on_event("startup")
+async def _startup() -> None:
+    await _ensure_tables()
 
 
 @app.get("/")
