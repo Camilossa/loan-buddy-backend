@@ -26,12 +26,12 @@ def healthcheck() -> dict:
 loans_router = APIRouter(prefix="/loans", tags=["loans"])
 
 
-@loans_router.get("/", response_model=List[Loan])
+@loans_router.get("", response_model=List[Loan])
 def list_loans() -> List[Loan]:
     return service.list_loans()
 
 
-@loans_router.post("/", response_model=Loan, status_code=status.HTTP_201_CREATED)
+@loans_router.post("", response_model=Loan, status_code=status.HTTP_201_CREATED)
 def create_loan(payload: LoanCreate) -> Loan:
     return service.create_loan(payload)
 
@@ -68,12 +68,12 @@ def get_payments_by_loan(loan_id: str) -> List[Payment]:
 payments_router = APIRouter(prefix="/payments", tags=["payments"])
 
 
-@payments_router.get("/", response_model=List[Payment])
+@payments_router.get("", response_model=List[Payment])
 def list_payments(limit: Optional[int] = None) -> List[Payment]:
     return service.list_payments(limit)
 
 
-@payments_router.post("/", response_model=Payment, status_code=status.HTTP_201_CREATED)
+@payments_router.post("", response_model=Payment, status_code=status.HTTP_201_CREATED)
 def create_payment(payload: PaymentCreate) -> Payment:
     payment = service.add_payment(payload)
     if not payment:
