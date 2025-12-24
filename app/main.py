@@ -12,24 +12,20 @@ app = FastAPI(title="Loan Buddy API", version="0.1.0")
 # Allow all origins by default so local/dev frontends (including LAN IPs) work.
 # Set CORS_ORIGINS="http://host1:port,http://host2" to restrict if needed.
 cors_env = os.getenv("CORS_ORIGINS")
-default_origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-]
+default_origins = ["*"]
 origins = (
     [o.strip() for o in cors_env.split(",") if o.strip()]
     if cors_env
     else default_origins
 )
 
+# If wildcard, credentials must be disabled to satisfy CORS spec.
+allow_credentials = origins != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
