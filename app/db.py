@@ -10,6 +10,9 @@ class Base(DeclarativeBase):
 
 
 logger = logging.getLogger(__name__)
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.INFO)
 
 
 def _normalize_postgres_driver(database_url: str) -> str:
