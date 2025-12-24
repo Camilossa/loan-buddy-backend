@@ -1,0 +1,67 @@
+[
+  {
+    "loanId": "1",
+    "amount": 4442.44,
+    "paymentDate": "2024-12-15",
+    "notes": null,
+    "id": "p1",
+    "principalPaid": 3942.44,
+    "interestPaid": 500.0,
+    "remainingBalance": 38464.2,
+    "installmentNumber": 4,
+    "status": "completed",
+    "createdAt": "2024-12-15T10:00:00Z"
+  },
+  {
+    "loanId": "1",
+    "amount": 4442.44,
+    "paymentDate": "2024-11-15",
+    "notes": null,
+    "id": "p2",
+    "principalPaid": 3902.9,
+    "interestPaid": 539.54,
+    "remainingBalance": 42367.1,
+    "installmentNumber": 3,
+    "status": "completed",
+    "createdAt": "2024-11-15T10:00:00Z"
+  },
+  {
+    "loanId": "3",
+    "amount": 3634.52,
+    "paymentDate": "2024-11-01",
+    "notes": null,
+    "id": "p3",
+    "principalPaid": 2696.52,
+    "interestPaid": 938.0,
+    "remainingBalance": 57955.32,
+    "installmentNumber": 8,
+    "status": "completed",
+    "createdAt": "2024-11-01T10:00:00Z"
+  },
+  {
+    "loanId": "4",
+    "amount": 2610.08,
+    "paymentDate": "2024-11-15",
+    "notes": null,
+    "id": "p4",
+    "principalPaid": 2410.08,
+    "interestPaid": 200.0,
+    "remainingBalance": 27644.24,
+    "installmentNumber": 2,
+    "status": "completed",
+    "createdAt": "2024-11-15T10:00:00Z"
+  },
+  {
+    "loanId": "5",
+    "amount": 3418.48,
+    "paymentDate": "2024-12-01",
+    "notes": null,
+    "id": "p5",
+    "principalPaid": 2573.21,
+    "interestPaid": 845.27,
+    "remainingBalance": 75029.53,
+    "installmentNumber": 12,
+    "status": "completed",
+    "createdAt": "2024-12-01T10:00:00Z"
+  }
+]

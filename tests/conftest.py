@@ -1,0 +1,56 @@
+from datetime import date
+from pathlib import Path
+from typing import Generator
+import sys
+
+import pytest
+from fastapi.testclient import TestClient
+
+# Ensure project root is on sys.path so `app` package imports work when running pytest from repo root.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from app.main import app
+from app.services.loan_service import LoanService
+from app.schemas import LoanCreate
+from app import db
+from app.models import Base
+import app.api.routes as routes
+
+
+@pytest.fixture()
+def temp_service(monkeypatch, tmp_path: Path) -> Generator[LoanService, None, None]:
+    """Create an isolated LoanService backed by a temp SQLite DB so tests don't touch real data."""
+    db_path = tmp_path / "test.db"
+    db_url = f"sqlite:///{db_path}"
+
+    db.init_engine(db_url)
+    Base.metadata.create_all(bind=db.engine)
+
+    service = LoanService(session_factory=db.SessionLocal)
+
+    # Seed a sample loan so list endpoint has data
+    service.create_loan(
+        LoanCreate(
+            debtorName="Fixture User",
+            debtorEmail="fixture@example.com",
+            debtorPhone="+52 555 111 1111",
+            principalAmount=10000,
+            interestRate=10,
+            totalInstallments=12,
+            startDate=date.today(),
+            nextPaymentDate=date.today(),
+        )
+    )
+
+    # Swap the global service used by routes so API calls hit the isolated DB.
+    routes.service = service
+
+    yield service
+
+
+@pytest.fixture()
+def client(temp_service: LoanService) -> TestClient:  # noqa: D401
+    """HTTP client bound to the app using the isolated service."""
+    return TestClient(app)
