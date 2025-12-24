@@ -19,7 +19,7 @@ pip install -r requirements.txt
 ### Ejecutar en desarrollo
 ```bash
 # Ejemplo Postgres local
-export DATABASE_URL="postgresql+psycopg://user:password@localhost:5432/loan_buddy"
+#export DATABASE_URL="postgresql+psycopg://user:password@localhost:5432/loan_buddy"
 uvicorn app.main:app --reload --port 8000
 ```
 Docs: http://localhost:8000/docs (prefijo global `/api`).
