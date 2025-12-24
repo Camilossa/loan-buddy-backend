@@ -25,21 +25,31 @@ logger.setLevel(logging.INFO)
 load_dotenv()
 
 
-def _normalize_driver(database_url: str) -> str:
-    """Force async drivers (asyncpg/aiosqlite) when URL omits them."""
+def _normalize_driver(database_url: str) -> tuple[str, bool]:
+    """Force async drivers and drop unsupported query params.
+
+    Returns: (normalized_url, ssl_required)
+    """
     url = make_url(database_url)
 
-    # Neon pools append channel_binding, which asyncpg does not accept; drop it.
-    if "channel_binding" in url.query:
-        query = dict(url.query)
-        query.pop("channel_binding", None)
-        url = url.set(query=query)
+    # Drop Neon pool param not supported by asyncpg.
+    query = dict(url.query)
+    query.pop("channel_binding", None)
+
+    ssl_required = False
+    sslmode = query.pop("sslmode", None)
+    if sslmode == "require":
+        ssl_required = True
 
     if url.drivername.startswith("postgresql") and "asyncpg" not in url.drivername:
         url = url.set(drivername="postgresql+asyncpg")
     elif url.drivername.startswith("sqlite") and "aiosqlite" not in url.drivername:
         url = url.set(drivername="sqlite+aiosqlite")
-    return str(url)
+
+    if query != url.query:
+        url = url.set(query=query)
+
+    return str(url), ssl_required
 
 
 def _mask_url(database_url: str) -> str:
@@ -58,13 +68,17 @@ def _build_engine(url: str | None = None) -> AsyncEngine:
         )
 
     # Neon requiere driver async (asyncpg) para conexiones eficientes.
-    database_url = _normalize_driver(database_url)
+    database_url, ssl_required = _normalize_driver(database_url)
 
     masked = _mask_url(database_url)
     logger.info("Usando DATABASE_URL=%s", masked)
 
+    connect_args = {"ssl": True} if ssl_required else None
+
     try:
-        engine = create_async_engine(database_url, echo=False, future=True)
+        engine = create_async_engine(
+            database_url, echo=False, future=True, connect_args=connect_args
+        )
     except Exception as exc:
         logger.error("Error creando engine con DATABASE_URL=%s", masked)
         raise exc
