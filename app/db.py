@@ -17,6 +17,10 @@ def _build_engine(url: str | None = None) -> Engine:
             "DATABASE_URL no está definido. Ej: postgres://user:pass@host:port/dbname"
         )
 
+    # If user provides plain postgres URL, default to psycopg3 driver.
+    if database_url.startswith("postgresql://") and "+psycopg" not in database_url:
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
     connect_args = (
         {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     )
