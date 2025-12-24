@@ -1,12 +1,20 @@
 import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 class Base(DeclarativeBase):
     """Declarative base for ORM models."""
+
+
+def _normalize_postgres_driver(database_url: str) -> str:
+    """Force psycopg (v3) driver when URL omits a driver."""
+    url = make_url(database_url)
+    if url.drivername in {"postgres", "postgresql"}:
+        url = url.set(drivername="postgresql+psycopg")
+    return str(url)
 
 
 def _build_engine(url: str | None = None) -> Engine:
@@ -16,6 +24,8 @@ def _build_engine(url: str | None = None) -> Engine:
         raise ValueError(
             "DATABASE_URL no está definido. Ej: postgres://user:pass@host:port/dbname"
         )
+
+    database_url = _normalize_postgres_driver(database_url)
 
     connect_args = (
         {"check_same_thread": False} if database_url.startswith("sqlite") else {}
