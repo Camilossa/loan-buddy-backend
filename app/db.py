@@ -28,6 +28,13 @@ load_dotenv()
 def _normalize_driver(database_url: str) -> str:
     """Force async drivers (asyncpg/aiosqlite) when URL omits them."""
     url = make_url(database_url)
+
+    # Neon pools append channel_binding, which asyncpg does not accept; drop it.
+    if "channel_binding" in url.query:
+        query = dict(url.query)
+        query.pop("channel_binding", None)
+        url = url.set(query=query)
+
     if url.drivername.startswith("postgresql") and "asyncpg" not in url.drivername:
         url = url.set(drivername="postgresql+asyncpg")
     elif url.drivername.startswith("sqlite") and "aiosqlite" not in url.drivername:
