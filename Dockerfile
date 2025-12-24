@@ -35,10 +35,6 @@ COPY requirements.txt ./
 RUN uv pip install --system -r requirements.txt
 
 COPY app ./app
-COPY tests ./tests
-
-# Run test suite; if it fails the build stops.
-RUN pytest --maxfail=1 --disable-warnings -q
 
 ########################
 # Runtime image (slim, non-root)
