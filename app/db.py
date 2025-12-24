@@ -1,6 +1,5 @@
 import os
 import logging
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -30,7 +29,6 @@ def _mask_url(database_url: str) -> str:
 
 
 def _build_engine(url: str | None = None) -> Engine:
-    load_dotenv()  # Load .env locally so DATABASE_URL is available when not exported
     database_url = url or os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError(
