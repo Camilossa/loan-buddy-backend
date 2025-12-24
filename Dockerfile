@@ -27,6 +27,10 @@ RUN pip install --upgrade pip && pip install uv==0.4.17
 ########################
 FROM base AS builder
 
+# Use a local SQLite database for the test stage so the build doesn't require
+# external DATABASE_URL secrets.
+ENV DATABASE_URL=sqlite:////tmp/pytest.db
+
 COPY requirements.txt ./
 RUN uv pip install --system -r requirements.txt
 
