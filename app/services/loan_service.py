@@ -136,7 +136,7 @@ class LoanService:
             if not loan:
                 return None
 
-            monthly_rate = loan.interestRate / 100 / 12
+            monthly_rate = loan.interestRate / 100  # tasa ya es mensual
             interest_due = self._round_money(loan.remainingBalance * monthly_rate)
             payment_type = (payload.paymentType or "").strip().lower()
 
@@ -261,19 +261,20 @@ class LoanService:
 
     # ---- Helpers --------------------------------------------------------
     def _calculate_monthly_payment(
-        self, principal: float, annual_rate: float, months: int
+        self, principal: float, monthly_rate_percent: float, months: int
     ) -> float:
+        """
+        Calculate monthly payment using simple interest formula (consistent with frontend).
+        monthly_rate_percent: The monthly interest rate as a percentage (e.g., 5 for 5%)
+        """
         if months <= 0:
             return 0.0
-        if annual_rate == 0:
+        if monthly_rate_percent == 0:
             return principal / months
-        monthly_rate = annual_rate / 100 / 12
-        return (
-            principal
-            * monthly_rate
-            * (1 + monthly_rate) ** months
-            / ((1 + monthly_rate) ** months - 1)
-        )
+        # Simple interest: total = principal + (principal * rate * months)
+        monthly_rate = monthly_rate_percent / 100
+        total_interest = principal * monthly_rate * months
+        return (principal + total_interest) / months
 
     def _refresh_status(self, loan: LoanModel) -> bool:
         """Update loan status based on dates/balance. Returns True if changed."""
