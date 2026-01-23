@@ -118,12 +118,16 @@ class LoanService:
     async def get_payments_by_loan(self, loan_id: str) -> List[Payment]:
         async with self.session_factory() as session:
             payments = (
-                await session.execute(
-                    select(PaymentModel)
-                    .where(PaymentModel.loanId == loan_id)
-                    .order_by(PaymentModel.paymentDate.desc())
+                (
+                    await session.execute(
+                        select(PaymentModel)
+                        .where(PaymentModel.loanId == loan_id)
+                        .order_by(PaymentModel.paymentDate.desc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return [self._to_payment_schema(p) for p in payments]
 
     async def add_payment(self, payload: PaymentCreate) -> Optional[Payment]:
@@ -133,10 +137,15 @@ class LoanService:
                 return None
 
             monthly_rate = loan.interestRate / 100 / 12
-            interest_paid = loan.remainingBalance * monthly_rate
-            principal_paid = max(0.0, payload.amount - interest_paid)
+            interest_due = loan.remainingBalance * monthly_rate
+            interest_paid = min(payload.amount, interest_due)
+            principal_paid = max(0.0, payload.amount - interest_due)
             new_remaining = max(0.0, loan.remainingBalance - principal_paid)
-            installment_number = loan.paidInstallments + 1
+            installment_number = (
+                loan.paidInstallments + 1
+                if principal_paid > 0
+                else loan.paidInstallments
+            )
 
             now = datetime.utcnow()
             payment = PaymentModel(
@@ -155,13 +164,16 @@ class LoanService:
 
             session.add(payment)
 
-            loan.paidInstallments = installment_number
             loan.remainingBalance = new_remaining
-            loan.status = "paid" if new_remaining <= 0 else loan.status
-            if new_remaining > 0:
-                loan.nextPaymentDate = loan.nextPaymentDate + relativedelta(months=1)
-                if loan.status == "paid":
-                    loan.status = "active"
+            if principal_paid > 0:
+                loan.paidInstallments = installment_number
+                loan.status = "paid" if new_remaining <= 0 else loan.status
+                if new_remaining > 0:
+                    loan.nextPaymentDate = loan.nextPaymentDate + relativedelta(
+                        months=1
+                    )
+                    if loan.status == "paid":
+                        loan.status = "active"
             loan.updatedAt = now
             self._refresh_status(loan)
 
