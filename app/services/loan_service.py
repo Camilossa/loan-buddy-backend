@@ -137,10 +137,40 @@ class LoanService:
                 return None
 
             monthly_rate = loan.interestRate / 100 / 12
-            interest_due = loan.remainingBalance * monthly_rate
-            interest_paid = min(payload.amount, interest_due)
-            principal_paid = max(0.0, payload.amount - interest_due)
-            new_remaining = max(0.0, loan.remainingBalance - principal_paid)
+            interest_due = self._round_money(loan.remainingBalance * monthly_rate)
+            payment_type = (payload.paymentType or "").strip().lower()
+
+            if payment_type in {
+                "interest",
+                "interest-only",
+                "interest_only",
+                "interes",
+                "intereses",
+                "solo intereses",
+                "solo_intereses",
+            }:
+                interest_paid = self._round_money(payload.amount)
+                principal_paid = 0.0
+            elif payment_type in {
+                "principal",
+                "principal-only",
+                "principal_only",
+                "capital",
+                "capital-only",
+                "capital_only",
+                "abono a capital",
+                "abono_capital",
+            }:
+                interest_paid = 0.0
+                principal_paid = self._round_money(payload.amount)
+            else:
+                interest_paid = min(payload.amount, interest_due)
+                principal_paid = self._round_money(payload.amount - interest_due)
+                if principal_paid < 0.01:
+                    principal_paid = 0.0
+            new_remaining = self._round_money(loan.remainingBalance - principal_paid)
+            if new_remaining < 0.01:
+                new_remaining = 0.0
             installment_number = (
                 loan.paidInstallments + 1
                 if principal_paid > 0
@@ -278,3 +308,7 @@ class LoanService:
 
     def _to_payment_schema(self, payment: PaymentModel) -> Payment:
         return Payment.model_validate(payment, from_attributes=True)
+
+    @staticmethod
+    def _round_money(value: float) -> float:
+        return round(value, 2)

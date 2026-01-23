@@ -51,7 +51,13 @@ class PaymentBase(BaseModel):
 
 
 class PaymentCreate(PaymentBase):
-    pass
+    paymentType: Optional[str] = Field(
+        default=None,
+        description=(
+            "Payment allocation: 'interest' (solo intereses), 'principal' (abono a capital), "
+            "or omit for automatic allocation."
+        ),
+    )
 
 
 class Payment(PaymentBase):
