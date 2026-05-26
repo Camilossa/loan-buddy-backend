@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.routes import api_router
 from .db import engine
 from .models import Base
-import time
 
 app = FastAPI(title="Loan Buddy API", version="0.1.0")
 
